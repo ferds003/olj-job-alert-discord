@@ -32,6 +32,20 @@ CREATE TABLE job_postings (
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- === Insert your OWN keywords FOR DISCORD HOOK ===
+INSERT INTO user_subscriptions (chat_id, keyword) VALUES
+  (1, 'electronics'),
+  (1, 'PCB'),
+  (1, 'Embedded Systems'),
+  (1, 'Hardware'),
+  (1, 'IoT'),
+  (1, 'Robotics'),
+  (1, 'AWS'),
+  (1, '3D Product'),
+  (1, 'Product Development'),
+  (1, 'Raspberry Pi');
+
+
 CREATE TABLE user_subscriptions (
   id          SERIAL PRIMARY KEY,
   chat_id     BIGINT NOT NULL,
