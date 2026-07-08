@@ -1,118 +1,124 @@
 # OLJAlerts 🚨
 
-Automated job alerts for OnlineJobs.ph — get notified on Telegram when jobs matching your keywords are posted.
+Automated job alerts for OnlineJobs.ph — get an email when a posting matches your keywords.
 
 **Perfect for:** Job hunters who want instant notifications without constantly checking job boards.
-
-**Get Started:** https://t.me/OLJAlertBot
 
 ---
 
 ## Architecture
 
-![Architecture Diagram](misc/Diagram.jpg)
+```
+OnlineJobs.ph → n8n (scrape) → Neon Postgres → n8n (match) → Email
+```
+
+- **n8n** runs locally (Windows), auto-started via pm2 + a Windows Task Scheduler entry at login — no manual step needed once your PC is on and connected to the internet.
+- **Neon** hosts the Postgres database, so job history persists independent of local uptime.
+- **Email (SMTP/Gmail)** delivers the alert — no bot, no external chat app required.
 
 ---
 
 ## What It Does
 
-1. **Scrapes** OnlineJobs.ph for new and recently updated job postings
-2. **Stores** jobs in a database
-3. **Lets you** subscribe to keywords via Telegram bot (https://t.me/OLJAlertBot)
-4. **Sends** you a Telegram message when a matching job is posted
-5. **Auto-cleans** subscriptions when users block the bot
+1. **Scrapes** OnlineJobs.ph once daily for new and recently-updated job postings
+2. **Stores** every complete posting in a Neon-hosted Postgres database
+3. **Matches** stored postings against a hardcoded keyword list (edited directly in the database — no self-serve bot/UI)
+4. **Emails** you an HTML alert when a posting matches one of your keywords
 
 ---
 
 ## What You Need
 
-- **Linux server** (self-hosted)
-- **n8n** (automation tool)
-- **PostgreSQL** (database)
-- **Supabase** (logging/analytics)
-- **Telegram Bot Token** (from @BotFather)
-- **Basic tech skills** (you got this!)
+- **n8n** (automation tool — runs locally via `npm install n8n`, no Docker/Linux server required)
+- **Neon** (free hosted Postgres — https://neon.tech)
+- **Gmail account with an App Password** (for SMTP sending — requires 2-Step Verification enabled)
+- **pm2** (keeps n8n running in the background and restarts it on crash)
+- **Node.js ≥22.22**
 
 ---
 
 ## How It Works
 
-```
-OnlineJobs.ph → n8n → PostgreSQL → n8n → Telegram → You
-   (new/updated jobs) (scrape)   (store)    (match)   (alert)
-```
-
 Think of it as a pipeline:
-- **Stage 1:** Scrapes job listings automatically (new jobs every 8 min, recently updated every 15 min)
-- **Stage 2:** Stores everything in a database
-- **Stage 3:** Matches jobs against your keywords (every 20 seconds)
-- **Stage 4:** Sends you alerts on Telegram
+- **Stage 1:** Scrapes job listings once daily — `Workflow 0` walks the next ~500 sequential job IDs, `Workflow 0 (recently-updated)` scrapes the live search results page for anything not yet stored
+- **Stage 2:** Stores everything in Neon Postgres (`job_postings` table)
+- **Stage 3:** `Workflow 2` polls for unprocessed postings, matches them against `user_subscriptions` keywords using word-boundary regex
+- **Stage 4:** On a match, the subworkflow sends you an HTML email via Gmail SMTP
+- **Stage 5:** `Workflow 3` runs daily and deletes processed postings older than 30 days to keep the database small
 
 ---
 
 ## Project Status
 
-**✅ Complete:**
-- Job Sync (Workflow 0) — Scrapes new job postings every 8 minutes
-- Job Sync Recently Updated (Workflow 0) — Scrapes recently updated jobs with old job_ids every 15 minutes
-- Subscription Manager (Workflow 1) — Manage keywords, unsubscribe, view stats, admin commands, and help via Telegram
-- Alert Notifier (Workflow 2 + Subworkflow) — Sends notifications when jobs match, auto-cleans blocked users
+**✅ Complete** (all workflows live in `n8n_discord/`):
+- `Workflow 0 - OnlineJobs.ph Job Sync` — scrapes new job postings, once daily
+- `Workflow 0 - OnlineJobs.ph Job Sync recently-updated` — scrapes the live search page for postings not yet stored, once daily
+- `Workflow 2 - Job Alert Notifier` + subworkflow — matches keywords and sends email alerts
+- `Workflow 3 - Cleanup` — daily deletion of old processed postings
+
+**Not included** (intentionally, vs. the original Telegram-based upstream project): no Telegram bot, no Supabase logging, no self-serve subscription management. Keywords are managed by editing `user_subscriptions` directly via SQL.
 
 ---
 
-## Telegram Bot Commands
+## Managing Keywords
 
-| Command | Description |
-|---|---|
-| `/keywordsub keyword1, keyword2, keyword3` | Subscribe to keywords (max 3, replaces existing) |
-| `/unsub` | Unsubscribe from all keywords |
-| `/stats` | View system stats (admin only) |
-| `/admin keyword1, keyword2, ...` | Set keywords with no limit (admin only) |
-| Any other message | Shows help with example commands |
+There's no bot or UI for this — edit `user_subscriptions` directly:
 
-**Start using the bot:** https://t.me/OLJAlertBot
+```sql
+DELETE FROM user_subscriptions WHERE chat_id = 1;
+
+INSERT INTO user_subscriptions (chat_id, keyword) VALUES
+  (1, 'n8n'),
+  (1, 'virtual assistant'),
+  (1, 'react');
+```
+
+Run this against your Neon database (`psql "<your-neon-connection-string>"` or the Neon SQL console).
 
 ---
 
 ## Quick Setup (High Level)
 
-1. **Set up the stack:**
-   - Install n8n on your Linux server
-   - Set up PostgreSQL database
-   - Create a Telegram bot via @BotFather
-   - Set up a Supabase project for logging
+1. **Create a Neon project** at neon.tech, and a dedicated database/role for this project.
 
-2. **Create the database:**
+2. **Create the schema:**
     ```bash
-    psql -U postgres -f database/database_setup.sql
+    psql "<your-neon-connection-string>" -f database/database_setup_neon.sql
     ```
 
-3. **Import workflows in n8n:**
-   - Import all 5 workflow JSON files from `n8n/`
-   - Configure PostgreSQL and Telegram credentials
-   - Configure Supabase credentials
-   - Enable all workflows
+3. **Install n8n locally:**
+    ```bash
+    npm install
+    ```
+    (n8n is a `package.json` dependency — this avoids relying on `npx`'s cache, which can resolve inconsistent/broken dependency versions.)
 
-4. **Test it:**
-   - Open Telegram and message the bot
-   - Use `/keywordsub keyword1, keyword2`
-   - Verify you receive job alerts
+4. **Import workflows into n8n:**
+   - Import all 5 workflow JSON files from `n8n_discord/`
+   - Configure a Postgres credential pointing at your Neon database
+   - Configure an SMTP credential (Gmail: `smtp.gmail.com`, port `465`, SSL, your Gmail address + App Password)
+   - Activate the workflows
+
+5. **Set up auto-start:**
+    ```bash
+    pm2 start ecosystem.config.js
+    pm2 save
+    ```
+    Then register a Windows Task Scheduler entry (trigger: at log on) that runs `pm2-resurrect.cmd` — this brings n8n back up automatically every time you log in, with no visible window.
+
+6. **Test it:**
+   - Open `http://localhost:5678`, open a workflow, click "Test workflow" to run it immediately (bypasses the daily schedule)
+   - Verify rows land in `job_postings`, then confirm you receive an email alert for a matching posting
 
 ---
 
 ## Notes
 
-- **Rate limiting:** New jobs scraped every 8 minutes with 5 jobs per batch and 10s delays; recently updated jobs scraped every 15 minutes with 20s delays
-- **Keyword matching:** Uses word-boundary regex matching for precise results (e.g., 'ai' matches 'AI specialist' but not 'PAID')
-- **Auto-cleanup:** Blocked users have their subscriptions automatically removed
-- **Replace-all behavior:** The `/keywordsub` command replaces all existing keywords, not additive
-- **Admin commands:** `/stats` and `/admin` are restricted to authorized admin users
-- **Help fallback:** Any unrecognized message shows a help example
-- **Logging:** All bot interactions are logged to Supabase for analytics
-- **HTML formatting:** Notifications use HTML formatting with emojis and sanitized content
-- **Job validation:** Only complete job postings (with description, type, compensation, date) are stored
-- **Modular design:** Each workflow operates independently through PostgreSQL as the data bus
+- **Daily batch size:** the "New Jobs" scraper checks ~500 sequential job IDs per run (up from a smaller batch when it ran every few minutes), to keep roughly the same daily coverage now that it only runs once a day
+- **Keyword matching:** word-boundary regex, case-insensitive (e.g., 'ai' matches "AI specialist" but not "PAID")
+- **Job validation:** only complete job postings (with description, type, compensation, date) are stored
+- **Modular design:** each workflow operates independently through Postgres as the data bus — no direct workflow-to-workflow calls except the notifier → subworkflow split
+- **Secrets:** the Neon connection string, Gmail App Password, and any other credentials live only in n8n's local encrypted credential store and a gitignored `.env` — never in a committed file
 
 ---
 
-See `spec.md` for detailed technical specifications and implementation details.
+See `spec.md` for the original Telegram-based upstream design (kept for reference — several of its details, like Supabase logging and the Telegram bot, no longer apply to this fork) and `AGENTS.md` for repo conventions.
