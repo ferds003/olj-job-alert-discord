@@ -1,3 +1,5 @@
 *.bkp
 session-*.md
 .opencode/
+.env
+node_modules/

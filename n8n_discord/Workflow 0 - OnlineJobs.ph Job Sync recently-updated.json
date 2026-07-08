@@ -1,12 +1,14 @@
 {
+  "id": "vgtNdnn7n9EyIn2K",
+  "name": "Workflow 0 - OnlineJobs.ph Job Sync recently-updated",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 15
+              "field": "days",
+              "triggerAtHour": 7
             }
           ]
         }

@@ -1,12 +1,14 @@
 {
+  "id": "EGifNPewloSz6mmW",
+  "name": "Workflow 0 - OnlineJobs.ph Job Sync",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 8
+              "field": "days",
+              "triggerAtHour": 6
             }
           ]
         }
@@ -442,7 +444,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get the input value of n from the incoming data\nconst n = parseInt($input.first().json.job_id, 10);\n\n// Generate items for n+1 through n+5\nconst results = [];\nfor (let i = 1; i <= 5; i++) {\n  results.push({ json: { value: n + i } });\n}\n\nreturn results;"
+        "jsCode": "// Get the input value of n from the incoming data\nconst n = parseInt($input.first().json.job_id, 10);\n\n// Generate items for n+1 through n+500.\n// Runs once daily now (was every 8 min / 5 IDs), so the batch is sized to\n// cover roughly a day's worth of new postings in a single run.\nconst BATCH_SIZE = 500;\nconst results = [];\nfor (let i = 1; i <= BATCH_SIZE; i++) {\n  results.push({ json: { value: n + i } });\n}\n\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -451,7 +453,7 @@
         -48
       ],
       "id": "0f8985e9-0beb-4464-8f9f-e0a1a57ffd87",
-      "name": "Generate next 5 job_ids"
+      "name": "Generate next 500 job_ids"
     },
     {
       "parameters": {
@@ -580,7 +582,7 @@
       "main": [
         [
           {
-            "node": "Generate next 5 job_ids",
+            "node": "Generate next 500 job_ids",
             "type": "main",
             "index": 0
           }
@@ -628,7 +630,7 @@
         ]
       ]
     },
-    "Generate next 5 job_ids": {
+    "Generate next 500 job_ids": {
       "main": [
         [
           {
