@@ -1,0 +1,680 @@
+{
+  "id": "yVhqCeVpFkS411St",
+  "name": "Workflow 2 - Job Alert Notifier",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        0
+      ],
+      "id": "de11b3ca-8b56-446f-b74f-787f63ca8aea",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "job_postings",
+          "mode": "list",
+          "cachedResultName": "job_postings"
+        },
+        "limit": 1,
+        "where": {
+          "values": [
+            {
+              "column": "is_processed",
+              "value": "false"
+            }
+          ]
+        },
+        "sort": {
+          "values": [
+            {
+              "column": "job_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -112,
+        0
+      ],
+      "id": "1982aae1-5a9e-4cee-9636-616399bd7532",
+      "name": "Select 1 unprocessed job post",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ZzBIvq2za0U7odoL",
+          "name": "job_alert_client"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6c89bd96-86b8-4736-b552-a18a2e9377b6",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "6a16c28c-2946-406f-b4a5-c30920df8c16",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        112,
+        0
+      ],
+      "id": "eff81448-57ce-4c38-8a56-d087ab849bfe",
+      "name": "Has unprocessed job post"
+    },
+    {
+      "parameters": {
+        "content": "## Find subscribers",
+        "height": 256,
+        "width": 1120,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        512,
+        -80
+      ],
+      "id": "03275b3d-abc6-44d4-8715-4b83b52b3192",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT keyword \nFROM user_subscriptions",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        0
+      ],
+      "id": "5662173b-b694-490b-b18e-36f0fe789904",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "ZzBIvq2za0U7odoL",
+          "name": "job_alert_client"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Extract all keywords from the input items\nconst keywords = $input.all().map(item => item.json.keyword);\n\n// 2. Return a single item containing the array\nreturn [{\n  json: {\n    matched_keywords: keywords\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "027b1d34-7c2f-42e2-a8ae-f1a2c778399c",
+      "name": "Transform to a list",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the Job Data using the reliable syntax\nconst jobData = $('Select 1 unprocessed job post').first().json;\n\nconst description = (jobData.job_description || \"\").toLowerCase();\nconst title = (jobData.job_title || \"\").toLowerCase();\nconst fullText = title + \" \" + description;\n\n// 2. Get all keywords from the input (from the 'Get Active Keywords' SQL node)\nconst allKeywords = $input.all().map(item => item.json.keyword);\n\n// 3. Filter: Keep ONLY keywords found in the text\nconst matchedKeywords = allKeywords.filter(kw => {\n  // Escape special regex characters\n  const escapedKw = kw.toLowerCase().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n  // Use word boundary matching\n  const regex = new RegExp(`\\\\b${escapedKw}\\\\b`, 'i');\n  return regex.test(fullText);\n});\n\n// 4. Return the filtered list (Items) so the next node can process them\nreturn matchedKeywords.map(kw => ({ json: { keyword: kw } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "dd7d9ee7-a662-4073-8f5f-c950691079f6",
+      "name": "Match keywords",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d393ef3f-da73-49c4-91d2-14a3a35e61f5",
+              "leftValue": "={{ $json.matched_keywords[0] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1024,
+        0
+      ],
+      "id": "2cc1d610-b3e1-4be3-bc3b-efceb35a08ee",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "job_postings",
+          "mode": "list",
+          "cachedResultName": "job_postings"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "is_processed": false,
+            "id": 0,
+            "job_id": 0
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "job_id",
+              "displayName": "job_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job_title",
+              "displayName": "job_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job_description",
+              "displayName": "job_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job_skills",
+              "displayName": "job_skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type_of_work",
+              "displayName": "type_of_work",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "compensation",
+              "displayName": "compensation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hours_per_week",
+              "displayName": "hours_per_week",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job_date",
+              "displayName": "job_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "is_processed",
+              "displayName": "is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1504,
+        304
+      ],
+      "id": "f00631e6-ea91-4c3d-b562-e05d321b3432",
+      "name": "Update rows in a table1",
+      "credentials": {
+        "postgres": {
+          "id": "ZzBIvq2za0U7odoL",
+          "name": "job_alert_client"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Flag processed job post",
+        "height": 256,
+        "width": 512,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        224
+      ],
+      "id": "0aa51347-58dc-4726-b348-76d7fad5410c",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cec2d0e1-3753-451a-94ee-f80a2ec6261a",
+              "name": "id",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b1663826-7474-4436-b8bd-28926f82e7d9",
+              "name": "is_processed",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1296,
+        304
+      ],
+      "id": "9c4fb4fe-08eb-4903-ae9f-a5e6ad0304e2",
+      "name": "Set payload1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job-alert-notifier-retrigger",
+        "authentication": "basicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -368,
+        -208
+      ],
+      "id": "47947c3a-a108-4787-8739-f8fc31f7e323",
+      "name": "Webhook",
+      "webhookId": "e0e1d605-843b-47c1-be08-9930eae95f1d",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "v72ZvZY8U2Mmyt8v",
+          "name": "Basic Auth"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://olj-alerts.johnlloyd.dev/webhook/job-alert-notifier-retrigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1776,
+        304
+      ],
+      "id": "3fdab13d-cbc1-4c01-9665-d55b45e9cf27",
+      "name": "Re-trigger",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "v72ZvZY8U2Mmyt8v",
+          "name": "Basic Auth"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0fe1ff71-ef45-4b52-ab61-9910c83e401c",
+              "name": "matched_keywords",
+              "value": "={{ $json.matched_keywords.join('|') }}",
+              "type": "string"
+            },
+            {
+              "id": "8d90188b-3289-4a4a-aa8b-a504240aa7b9",
+              "name": "job_postings_table_row_id",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f20fff52-e8cc-47f7-b327-a3de011fd0e8",
+              "name": "job_title",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.job_title }}",
+              "type": "string"
+            },
+            {
+              "id": "55ec0f86-5db7-47dd-afed-1c9c3a2b2fde",
+              "name": "job_description",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.job_description.substring(0, 120) }}",
+              "type": "string"
+            },
+            {
+              "id": "9a8b9ab0-8b89-4527-8c79-b8ae97b7b569",
+              "name": "type_of_work",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.type_of_work }}",
+              "type": "string"
+            },
+            {
+              "id": "fcc5c922-ade3-440e-9f26-e1fe460995f9",
+              "name": "compensation",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.compensation }}",
+              "type": "string"
+            },
+            {
+              "id": "9893dc83-fd09-4f35-b6b3-7ff97aad19ae",
+              "name": "hours_per_week",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.hours_per_week }}",
+              "type": "string"
+            },
+            {
+              "id": "a9fa2183-11ce-494f-94b6-0128c1ea47de",
+              "name": "job_id",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.job_id }}",
+              "type": "string"
+            },
+            {
+              "id": "81caf25c-5182-4c76-9469-1fb7eddadd5e",
+              "name": "job_postings_table_row_id",
+              "value": "={{ $('Select 1 unprocessed job post').first().json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1328,
+        -320
+      ],
+      "id": "d33bd1f4-3e54-4023-a1ec-a2b683bacd3c",
+      "name": "Set required variables"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "uazY2IKDxLFdsdWF",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/uazY2IKDxLFdsdWF"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1536,
+        -320
+      ],
+      "id": "80dec404-d226-4b89-875c-86ad2a10ba51",
+      "name": "Call 'Workflow 2 - Job Alert Notifier subworkflow'"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Select 1 unprocessed job post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select 1 unprocessed job post": {
+      "main": [
+        [
+          {
+            "node": "Has unprocessed job post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has unprocessed job post": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Match keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform to a list": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match keywords": {
+      "main": [
+        [
+          {
+            "node": "Transform to a list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Set required variables",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set payload1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update rows in a table1": {
+      "main": [
+        []
+      ]
+    },
+    "Set payload1": {
+      "main": [
+        [
+          {
+            "node": "Update rows in a table1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Set required variables": {
+      "main": [
+        [
+          {
+            "node": "Call 'Workflow 2 - Job Alert Notifier subworkflow'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f593b1bde7a656a109af29ca03677e894cc660fc016075f84ae5399c2f124339"
+  }
+}
