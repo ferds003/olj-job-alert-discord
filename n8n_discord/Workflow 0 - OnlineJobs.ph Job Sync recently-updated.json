@@ -8,6 +8,7 @@
           "interval": [
             {
               "field": "days",
+              "daysInterval": 1,
               "triggerAtHour": 7
             }
           ]
@@ -382,6 +383,16 @@
               "operator": {
                 "type": "string",
                 "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f1a2b3c4-5d6e-47f8-9a0b-1c2d3e4f5a6b",
+              "leftValue": "={{ new Date($json.jobDate) >= new Date(Date.now() - 30*24*60*60*1000) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
                 "singleValue": true
               }
             }

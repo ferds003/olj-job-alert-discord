@@ -40,7 +40,7 @@ CREATE TABLE user_subscriptions (
   UNIQUE(chat_id, keyword)
 );
 
--- === Insert your OWN keywords FOR DISCORD HOOK ===
+-- === Insert your OWN keywords ===
 INSERT INTO user_subscriptions (chat_id, keyword) VALUES
   (1, 'electronics'),
   (1, 'PCB'),
