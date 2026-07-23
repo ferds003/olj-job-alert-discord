@@ -653,6 +653,9 @@
       ]
     }
   },
+  "settings": {
+    "timezone": "Asia/Manila"
+  },
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true,

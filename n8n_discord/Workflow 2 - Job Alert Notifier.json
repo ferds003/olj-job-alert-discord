@@ -7,8 +7,14 @@
         "rule": {
           "interval": [
             {
-              "field": "seconds",
-              "secondsInterval": 20
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 5
+            },
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 18
             }
           ]
         }
@@ -671,6 +677,9 @@
         ]
       ]
     }
+  },
+  "settings": {
+    "timezone": "Asia/Manila"
   },
   "pinData": {},
   "meta": {
